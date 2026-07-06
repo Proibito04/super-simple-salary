@@ -1,10 +1,39 @@
 import type { DBSchema } from 'idb'
 
+export interface CustomSetting {
+  id: string
+  name: string
+  amount: number
+}
+
+export interface ActiveCustomSetting {
+  id: string
+  name: string
+  amount: number
+  active: boolean
+}
+
+export interface Company {
+  id: string
+  name: string
+  hourlyWage: number
+  customSettings?: CustomSetting[]
+}
+
 export interface WorkedDay {
   date: Date
   timeSlots: TimeSlot[]
   travel: boolean
   carUsage: boolean
+  companyId?: string
+  companyName?: string
+  payMode?: 'hourly' | 'fixed'
+  fixedPrice?: number
+  hourlyWage?: number
+  travelRate?: number
+  carAllowance?: number
+  customSettings?: ActiveCustomSetting[]
+  extraEarnings?: number
 }
 
 export interface TimeSlot {
@@ -36,10 +65,18 @@ export interface MyDB extends DBSchema {
     value: PaymentHistory
     indexes: { monthYear: string }
   }
+  companies: {
+    key: string
+    value: Company
+  }
 }
 
 export interface DetailedWage {
-  totalHours: number,
+  totalHours: number
   totalTravel: number
   dailyAllowance: number
+  totalFixedPay: number
+  hourlyEarnings: number
+  totalReimbursement: number
+  totalExtraEarnings: number
 }

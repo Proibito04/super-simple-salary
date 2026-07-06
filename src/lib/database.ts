@@ -1,9 +1,9 @@
 import { writable } from 'svelte/store'
 import { openDB, type IDBPDatabase } from 'idb'
-import type { MyDB, TimeSlot, WorkedDay, PaymentHistory } from '../types'
+import type { MyDB, TimeSlot, WorkedDay, PaymentHistory, Company } from '../types'
 import { ErrorResponse, SuccessResponse } from './logger'
 import { addDays, differenceInHours, parse, format } from 'date-fns'
-import { calculateTotalHours } from '$lib/utils/timeTrackingUtils'
+import { calculateTotalHours, calculateDailyEarnings } from '$lib/utils/timeTrackingUtils'
 
 class DatabaseManager {
   _workedDays = writable<WorkedDay[]>([])
@@ -12,7 +12,33 @@ class DatabaseManager {
   constructor() {}
 
   async startDatabase() {
-    this.dbPromise = this.initializeDB()
+    try {
+      this.dbPromise = this.initializeDB();
+      const db = await this.dbPromise;
+      console.log("[DEBUG] Database initialized successfully");
+      
+      // Seed default company if it doesn't exist
+      const defaultCompany = await db.get('companies', 'default');
+      if (!defaultCompany) {
+        await db.put('companies', {
+          id: 'default',
+          name: 'Azienda Standard (Default)',
+          hourlyWage: 10,
+          customSettings: [
+            { id: 'viaggio', name: 'Viaggio', amount: 20 },
+            { id: 'macchina', name: 'Con la tua macchina', amount: 40 }
+          ]
+        });
+        console.log("[DEBUG] Seeded default company");
+      }
+
+      // Load days into reactive store
+      const allDays = await this.getWorkedDays();
+      this._workedDays.set(allDays);
+    } catch (e) {
+      console.error("[DEBUG] Database initialization failed:", e);
+      throw e;
+    }
   }
 
   async addWorkedDay(workedDay: WorkedDay) {
@@ -25,18 +51,23 @@ class DatabaseManager {
       return
     }
     try {
+      // Strip Svelte 5 state proxies to avoid DataCloneError
+      const cleanWorkedDay = JSON.parse(JSON.stringify(workedDay))
+      cleanWorkedDay.date = new Date(cleanWorkedDay.date)
+
       const tx = db.transaction('workedDays', 'readwrite')
       const store = tx.objectStore('workedDays')
-      const key = format(workedDay.date, 'yyyy-MM-dd')
-      await store.put(workedDay, key)
-      new SuccessResponse(`Successfully added ${workedDay} with key ${key}`)
+      const key = format(cleanWorkedDay.date, 'yyyy-MM-dd')
+      await store.put(cleanWorkedDay, key)
+      new SuccessResponse(`Successfully added clean workedDay with key ${key}`)
       await tx.done
-      this._workedDays.update((val) => {
-        val.push(workedDay)
-        return val
-      })
-    } catch (error) {
+      
+      // Reload days to trigger reactivity with a new array reference
+      const allDays = await this.getWorkedDays();
+      this._workedDays.set(allDays);
+    } catch (error: any) {
       new ErrorResponse(error)
+      throw error;
     }
   }
 
@@ -98,7 +129,10 @@ class DatabaseManager {
     const store = tx.objectStore('workedDays')
     await store.delete(format(workedDay.date, 'yyyy-MM-dd'))
     await tx.done
-    // this._workedDays.update(workedDay);
+    
+    // Reload days to trigger reactivity with a new array reference
+    const allDays = await this.getWorkedDays();
+    this._workedDays.set(allDays);
   }
 
   calculateTimeSlot(timeSlot: TimeSlot): number {
@@ -168,12 +202,32 @@ class DatabaseManager {
     return totalCarUsage
   }
 
-  async getTotalCompensationOfMouth(month: Date) {
-    const hourlyWage = this.getBaseWage()
-    const totalHoursWorked = await this.getHoursWorkedMonth(month)
-    const travelTotal = await this.getWorkWithTravelOfMonth(month)
-    const carUsage = await this.getCarUsageOfMonth(month)
-    return totalHoursWorked * hourlyWage + travelTotal * 20 + carUsage
+  async getTotalCompensationOfMouth(month: Date): Promise<number> {
+    const db = await this.dbPromise
+    if (!db) return 0
+    const tx = db.transaction('workedDays', 'readonly')
+    const store = tx.objectStore('workedDays')
+    const index = store.index('date')
+
+    const firstDayOfMonth = new Date(month.getFullYear(), month.getMonth(), 1)
+    const lastDayOfMonth = new Date(
+      month.getFullYear(),
+      month.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    )
+
+    const range = IDBKeyRange.bound(firstDayOfMonth, lastDayOfMonth)
+    const allDaysWorked = await index.getAll(range)
+
+    let total = 0
+    for (const day of allDaysWorked) {
+      total += calculateDailyEarnings(day)
+    }
+    return total
   }
 
   async getPaymentHistory() {
@@ -202,8 +256,40 @@ class DatabaseManager {
     return await store.put(paymentRecord)
   }
 
+  async getCompanies(): Promise<Company[]> {
+    const db = await this.dbPromise
+    if (!db) return []
+    return db.getAll('companies')
+  }
+
+  async addCompany(company: Company) {
+    const db = await this.dbPromise
+    if (!db) return
+    try {
+      // Strip Svelte 5 state proxies to avoid DataCloneError
+      const cleanCompany = JSON.parse(JSON.stringify(company))
+
+      const tx = db.transaction('companies', 'readwrite')
+      const store = tx.objectStore('companies')
+      await store.put(cleanCompany)
+      await tx.done
+    } catch (e) {
+      console.error(e)
+      throw e
+    }
+  }
+
+  async deleteCompany(id: string) {
+    const db = await this.dbPromise
+    if (!db) return
+    const tx = db.transaction('companies', 'readwrite')
+    const store = tx.objectStore('companies')
+    await store.delete(id)
+    await tx.done
+  }
+
   private async initializeDB(): Promise<IDBPDatabase<MyDB>> {
-    return openDB<MyDB>('MyDB', 4, {
+    return openDB<MyDB>('MyDB', 6, {
       upgrade(db, oldVersion, newVersion, transaction) {
         console.log('qui')
 
@@ -227,21 +313,24 @@ class DatabaseManager {
             unique: false
           })
         }
+        if (!db.objectStoreNames.contains('companies')) {
+          db.createObjectStore('companies', { keyPath: 'id' })
+        }
 
         // Check if the old object store exists before trying to access it
-        if (db.objectStoreNames.contains('giorni_lavorati')) {
-          const giorniLavoratiStore = transaction.objectStore('giorni_lavorati')
+        if (db.objectStoreNames.contains('giorni_lavorati' as any)) {
+          const giorniLavoratiStore = (transaction as any).objectStore('giorni_lavorati')
           console.log('qui')
 
           giorniLavoratiStore
             .openCursor()
-            .then(function processCursor(cursor) {
+            .then(function processCursor(cursor: any) {
               if (!cursor) {
                 console.log('No more entries!')
                 return
               }
 
-              const record = cursor.value
+              const record = cursor.value as any
               const newTimeSlots: TimeSlot[] = record.fasce_orarie.map(
                 (element: any) => ({
                   start: element.inizio,
@@ -267,18 +356,29 @@ class DatabaseManager {
                     .then(() => {
                       cursor.continue().then(processCursor)
                     })
-                    .catch((error) => {
+                    .catch((error: any) => {
                       console.error('Error deleting old record:', error)
                     })
                 })
-                .catch((error) => {
+                .catch((error: any) => {
                   console.error('Error adding new record:', error)
                 })
             })
-            .catch((error) => {
+            .catch((error: any) => {
               console.error('Error opening cursor:', error)
             })
         }
+      },
+      blocked(currentVersion, blockedVersion, event) {
+        console.warn('[DEBUG] openDB is BLOCKED! Please close other tabs. Current:', currentVersion, 'Blocked:', blockedVersion);
+        alert("AGGIORNAMENTO BLOCCATO: Hai un'altra scheda o finestra di questa app aperta. Per favore, chiudi tutte le altre schede per permettere l'aggiornamento del database, poi ricarica la pagina.");
+      },
+      blocking(currentVersion, blockedVersion, event) {
+        console.warn('[DEBUG] openDB is BLOCKING. Current:', currentVersion, 'Blocked:', blockedVersion);
+      },
+      terminated() {
+        console.error('[DEBUG] openDB was terminated unexpectedly.');
+        alert("Il database è stato terminato inaspettatamente.");
       }
     })
   }

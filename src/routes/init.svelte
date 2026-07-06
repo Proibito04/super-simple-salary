@@ -1,7 +1,11 @@
 <script lang="ts">
-  let pagaOraria: number = 0;
+  let pagaOraria: number = $state(0);
 
-  export let salvato = false;
+  interface Props {
+    salvato?: boolean;
+  }
+
+  let { salvato = $bindable(false) }: Props = $props();
 
   async function salvaPaga() {
     salvato = true;
@@ -11,5 +15,5 @@
 <div>
   <label for="paga" class="text-xl">Inserisci la tua paga oraria:</label>
   <input type="number" id="paga" bind:value={pagaOraria} />
-  <button on:click={salvaPaga}>Salva</button>
+  <button onclick={salvaPaga}>Salva</button>
 </div>

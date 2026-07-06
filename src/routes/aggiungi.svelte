@@ -1,17 +1,44 @@
 <script lang="ts">
-  import { getContext } from 'svelte'
-  // import { daysOBS } from '../lib/store';
+
+  import { getContext, onMount } from 'svelte'
   import { format } from 'date-fns'
   import { DB } from '$lib/database'
-  import type { TimeSlot, WorkedDay } from '../types'
+  import { toasts } from '$lib/toast'
+  import type { TimeSlot, WorkedDay, Company, ActiveCustomSetting } from '../types'
 
-  const { toggleAggiungi } = getContext<{ toggleAggiungi: () => void }>(
-    'vision'
-  )
-  let giorno = format(new Date(), 'yyyy-MM-dd')
-  let travel = false
-  let yourCar = false
-  let fasceOrarie: TimeSlot[] = [{ start: '', end: '' }]
+  const { toggleAggiungi } = getContext<{ toggleAggiungi: () => void }>('vision')
+  
+  let giorno = $state(format(new Date(), 'yyyy-MM-dd'))
+  let fasceOrarie: TimeSlot[] = $state([{ start: '', end: '' }])
+  
+  // New features state
+  let companies: Company[] = $state([])
+  let selectedCompanyId = $state('default')
+  let payMode = $state<'hourly' | 'fixed'>('hourly')
+  let fixedPrice = $state(0)
+  let extraEarnings = $state(0)
+  
+  let activeCustomSettings: ActiveCustomSetting[] = $state([])
+
+  let selectedCompany = $derived(companies.find(c => c.id === selectedCompanyId))
+
+  onMount(async () => {
+    companies = await DB.getCompanies()
+  })
+
+  // Watch for selected company changes to initialize the custom settings checkboxes
+  $effect(() => {
+    if (selectedCompany) {
+      activeCustomSettings = (selectedCompany.customSettings || []).map(s => ({
+        id: s.id,
+        name: s.name,
+        amount: s.amount,
+        active: true
+      }))
+    } else {
+      activeCustomSettings = []
+    }
+  })
 
   // Funzione per aggiungere una nuova fascia oraria
   function aggiungiFasciaOraria() {
@@ -24,126 +51,236 @@
   }
 
   // Funzione per salvare il giorno lavorativo nel DB
-  async function salvaGiornoLavorato() {
+  async function salvaGiornoLavorato(e: Event) {
+    console.log("[DEBUG] salvaGiornoLavorato started. Event:", e);
+    e.preventDefault();
+
+    // Filter out empty time slots
+    const validTimeSlots = fasceOrarie.filter(f => f.start && f.end);
+    console.log("[DEBUG] validTimeSlots:", validTimeSlots);
+    
+    if (validTimeSlots.length === 0 && payMode === 'hourly') {
+      console.log("[DEBUG] No valid time slots provided for hourly pay mode");
+      toasts.show("Inserisci almeno una fascia oraria completa (inizio e fine)!", "error");
+      return;
+    }
+
     const date = new Date(giorno)
+    console.log("[DEBUG] Saving date:", date, "payMode:", payMode);
     const newWorkedDay: WorkedDay = {
       date,
-      carUsage: yourCar,
-      timeSlots: fasceOrarie,
-      travel
+      timeSlots: validTimeSlots.map(f => ({ ...f })),
+      payMode,
+      companyId: selectedCompanyId || undefined,
+      companyName: selectedCompany?.name || undefined,
+      fixedPrice: payMode === 'fixed' ? fixedPrice : undefined,
+      hourlyWage: payMode === 'hourly' ? (selectedCompany?.hourlyWage ?? 10) : undefined,
+      
+      // Store dynamic custom settings
+      customSettings: activeCustomSettings.length > 0 ? activeCustomSettings.map(s => ({ ...s })) : undefined,
+      travel: false,
+      carUsage: false,
+      extraEarnings: extraEarnings > 0 ? extraEarnings : undefined
     }
-    await DB.addWorkedDay(newWorkedDay)
 
-    toggleAggiungi()
+    try {
+      await DB.addWorkedDay(newWorkedDay)
+      toasts.show("Turno salvato con successo!", "success");
+      toggleAggiungi()
+    } catch (e: any) {
+      toasts.show("Errore durante il salvataggio: " + (e.message || String(e)), "error");
+      console.error(e);
+    }
   }
 </script>
 
-<div
-  class="fixed z-50 flex h-full w-full items-center overflow-y-auto bg-white"
->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
   <form
-    on:submit|preventDefault={salvaGiornoLavorato}
-    class="mx-auto max-w-lg rounded-lg bg-white p-6 shadow-md"
+    onsubmit={salvaGiornoLavorato}
+    class="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl border dark:border-slate-800 dark:bg-slate-900 dark:text-white"
   >
-    <button
-      class="mb-5 rounded-md border px-3 py-2 text-sm font-bold shadow-md"
-      on:click={toggleAggiungi}>chiudi</button
-    >
-    <div class="mb-4">
-      <label for="giorno" class="mb-2 block text-sm font-bold text-gray-700"
-        >Giorno:</label
+    <div class="flex items-center justify-between border-b pb-3 mb-5">
+      <h2 class="text-xl font-black text-gray-900 dark:text-white">Aggiungi Turno</h2>
+      <button
+        type="button"
+        class="rounded-xl border px-3 py-1.5 text-xs font-bold hover:bg-gray-100 dark:border-slate-800 dark:hover:bg-slate-800 transition"
+        onclick={toggleAggiungi}>Chiudi</button
       >
+    </div>
+
+    <!-- Giorno -->
+    <div class="mb-4">
+      <label for="giorno" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Giorno:</label>
       <input
         type="date"
         bind:value={giorno}
         id="giorno"
-        class="focus:shadow-outline rounded border px-3 py-2 leading-tight text-gray-700 shadow focus:outline-none"
+        class="w-full rounded-xl border border-gray-300 p-2.5 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
       />
     </div>
 
-    <!-- add radio viaggio -->
+    <!-- Azienda Selection -->
     <div class="mb-4">
-      <label for="viaggio" class="mb-2 block text-sm font-bold text-gray-700"
-        >Viaggio:</label
+      <label for="company" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Azienda (Catering/Ristorante):</label>
+      <select
+        bind:value={selectedCompanyId}
+        id="company"
+        class="w-full rounded-xl border border-gray-300 p-2.5 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
       >
-      <input
-        type="checkbox"
-        bind:checked={travel}
-        id="viaggio"
-        class="focus:shadow-outline h-5 w-5 rounded border px-5 py-2 leading-tight text-gray-700 shadow focus:outline-none"
-      />
+        <option value="">Nessuna azienda (Paga standard)</option>
+        {#each companies as comp}
+          <option value={comp.id}>{comp.name} (Paga: €{comp.hourlyWage}/h)</option>
+        {/each}
+      </select>
+    </div>
 
-      <!-- add radio viaggio -->
-      <div class="mb-4">
-        <label for="yourCar" class="mb-2 block text-sm font-bold text-gray-700"
-          >Con la tua macchina:</label
-        >
-        <input
-          type="checkbox"
-          bind:checked={yourCar}
-          id="yourcar"
-          class="focus:shadow-outline h-5 w-5 rounded border px-5 py-2 leading-tight text-gray-700 shadow focus:outline-none"
-        />
+    <!-- Modalità di Pagamento -->
+    <div class="mb-4">
+      <span class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Modalità di Pagamento:</span>
+      <div class="flex gap-6 mt-1">
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer font-bold">
+          <input type="radio" bind:group={payMode} value="hourly" class="h-4 w-4 text-green-600 focus:ring-green-500" />
+          Ore + Rimborsi
+        </label>
+        <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer font-bold">
+          <input type="radio" bind:group={payMode} value="fixed" class="h-4 w-4 text-green-600 focus:ring-green-500" />
+          Prezzo Fisso (Flat)
+        </label>
+      </div>
+    </div>
 
-        {#each fasceOrarie as fascia, index}
-          <div class="mb-4 grid grid-cols-3 gap-2">
-            <div>
-              <label
-                for={`inizio-${index}`}
-                class="mb-2 block text-sm font-bold text-gray-700"
-                >Inizio:</label
-              >
-              <input
-                type="time"
-                bind:value={fascia.start}
-                id={`inizio-${index}`}
-                step="900"
-                class="focus:shadow-outline block w-full rounded border py-2 leading-tight text-gray-700 shadow focus:outline-none"
-                required
-              />
+    <!-- Rimborsi / Indennità disponibili (Both for hourly and fixed if needed) -->
+    <div class="mb-4 rounded-2xl border p-4 dark:border-slate-800 dark:bg-slate-950 flex flex-col gap-3">
+      <span class="block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Rimborsi / Indennità:</span>
+      {#if activeCustomSettings.length > 0}
+        {#each activeCustomSettings as setting}
+          <div class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              bind:checked={setting.active}
+              id={`setting-${setting.id}`}
+              class="h-5 w-5 rounded-lg border text-green-600 focus:ring-green-500 mt-1 cursor-pointer"
+            />
+            <div class="flex-1">
+              <label for={`setting-${setting.id}`} class="text-sm font-bold text-gray-700 dark:text-gray-300 block cursor-pointer">
+                {setting.name}
+              </label>
+              {#if setting.active}
+                <div class="flex items-center gap-2 mt-1.5">
+                  <span class="text-xs text-gray-400">Importo (€):</span>
+                  <input
+                    type="number"
+                    bind:value={setting.amount}
+                    min="0"
+                    step="1"
+                    class="w-24 rounded-lg border border-gray-300 p-1.5 text-xs text-gray-900 shadow-sm focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  />
+                </div>
+              {/if}
             </div>
-            <div>
-              <label
-                for={`fine-${index}`}
-                class="mb-2 block text-sm font-bold text-gray-700">Fine:</label
-              >
-              <input
-                type="time"
-                bind:value={fascia.end}
-                id={`fine-${index}`}
-                class="focus:shadow-outline block w-full rounded border py-2 leading-tight text-gray-700 shadow focus:outline-none"
-                step="900"
-                required
-              />
-            </div>
-            {#if index > 0}
-              <div class="flex items-end justify-center">
-                <button
-                  on:click={() => rimuoviFasciaOraria(index)}
-                  class="focus:shadow-outline rounded bg-red-500 px-4 py-2 font-bold text-white hover:bg-red-700 focus:outline-none"
-                  >Rimuovi</button
-                >
-              </div>
-            {/if}
           </div>
         {/each}
+      {:else}
+        <span class="text-xs text-gray-500 dark:text-gray-400">Nessun rimborso configurato per questa azienda.</span>
+      {/if}
+    </div>
 
-        <div class="flex items-center justify-between">
-          <button
-            on:click={() => aggiungiFasciaOraria()}
-            type="button"
-            class="focus:shadow-outline rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700 focus:outline-none"
-          >
-            Aggiungi Fascia Oraria
-          </button>
-          <button
-            type="submit"
-            class="focus:shadow-outline rounded bg-green-500 px-4 py-2 font-bold text-white hover:bg-green-700 focus:outline-none"
-          >
-            Salva Giorno Lavorato
-          </button>
-        </div>
+    <!-- Paga Prezzo Fisso -->
+    {#if payMode === 'fixed'}
+      <div class="mb-4">
+        <label for="fixedPrice" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Importo Fisso (€):</label>
+        <input
+          type="number"
+          bind:value={fixedPrice}
+          id="fixedPrice"
+          min="0"
+          step="5"
+          class="w-full rounded-xl border border-gray-300 p-2.5 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-bold"
+        />
       </div>
+    {/if}
+
+    <!-- Extra / Mance -->
+    <div class="mb-4">
+      <label for="extraEarnings" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Entrate Extra (Mance, bonus, ecc...):</label>
+      <input
+        type="number"
+        bind:value={extraEarnings}
+        id="extraEarnings"
+        min="0"
+        step="1"
+        placeholder="0"
+        class="w-full rounded-xl border border-gray-300 p-2.5 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+      />
+    </div>
+
+    <!-- Fasce Orarie (Always visible to track hours) -->
+    <div class="mb-5 border-t pt-4 dark:border-slate-800">
+      <span class="mb-3 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+        Fasce Orarie lavorate (per tracciare le ore):
+      </span>
+      
+      {#each fasceOrarie as fascia, index}
+        <div class="mb-3 grid grid-cols-3 gap-2.5 items-end">
+          <div>
+            <label for={`inizio-${index}`} class="block text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1">Inizio:</label>
+            <input
+              type="time"
+              bind:value={fascia.start}
+              id={`inizio-${index}`}
+              step="900"
+              class="w-full rounded-xl border border-gray-300 p-2 text-sm text-gray-900 focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
+            />
+          </div>
+          <div>
+            <label for={`fine-${index}`} class="block text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1">Fine:</label>
+            <input
+              type="time"
+              bind:value={fascia.end}
+              id={`fine-${index}`}
+              class="w-full rounded-xl border border-gray-300 p-2 text-sm text-gray-900 focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
+              step="900"
+            />
+          </div>
+          <div>
+            {#if index > 0}
+              <button
+                type="button"
+                onclick={() => rimuoviFasciaOraria(index)}
+                class="w-full rounded-xl bg-red-600 py-2 font-bold text-sm text-white hover:bg-red-700 active:scale-95 transition shadow-sm"
+              >
+                Rimuovi
+              </button>
+            {/if}
+          </div>
+        </div>
+      {/each}
+
+      <button
+        onclick={() => aggiungiFasciaOraria()}
+        type="button"
+        class="mt-2 text-xs text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 font-extrabold uppercase tracking-wider transition"
+      >
+        + Aggiungi fascia oraria
+      </button>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex justify-end gap-3 mt-6 border-t pt-4 dark:border-slate-800">
+      <button
+        type="button"
+        class="rounded-xl border px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 dark:border-slate-750 dark:text-gray-300 dark:hover:bg-slate-800 transition active:scale-95"
+        onclick={() => { console.log("[DEBUG] Annulla clicked"); toggleAggiungi(); }}
+      >
+        Annulla
+      </button>
+      <button
+        type="submit"
+        onclick={() => console.log("[DEBUG] Salva Turno button clicked!")}
+        class="rounded-xl bg-green-600 px-5 py-2 text-sm font-bold text-white hover:bg-green-700 shadow-md active:scale-95 transition"
+      >
+        Salva Turno
+      </button>
     </div>
   </form>
 </div>

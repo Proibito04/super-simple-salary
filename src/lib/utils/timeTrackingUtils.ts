@@ -92,16 +92,11 @@ export function getDaysWithTravel(days: WorkedDay[], month: number): number {
  * @returns Total compensation.
  */
 export function calculateTotalCompensation(days: WorkedDay[]): number {
-  let totalWorked = 0
-  let travelTotal = 0
-  let carAllowance = 0
+  let total = 0
   for (const day of days) {
-    travelTotal += day.travel ? 2 : 0
-    totalWorked += calculateTotalHours(day.timeSlots)
-    carAllowance += day.carUsage ? 40 : 0
+    total += calculateDailyEarnings(day)
   }
-
-  return (totalWorked + travelTotal) * 10 + carAllowance
+  return total
 }
 
 /**
@@ -113,16 +108,52 @@ export function calculateDetailedCompensation(days: WorkedDay[]): DetailedWage {
   let totalWorked = 0
   let travelTotal = 0
   let carAllowance = 0
+  let totalFixedPay = 0
+  let hourlyEarnings = 0
+  let totalReimbursement = 0
+  let totalExtraEarnings = 0
+
   for (const day of days) {
-    travelTotal += day.travel ? 2 : 0
-    totalWorked += calculateTotalHours(day.timeSlots)
-    carAllowance += day.carUsage ? 1 : 0
+    const hours = calculateTotalHours(day.timeSlots)
+    totalWorked += hours
+    
+    if (day.payMode === 'fixed') {
+      totalFixedPay += Number(day.fixedPrice) || 0
+    } else {
+      const wage = Number(day.hourlyWage) || 10
+      hourlyEarnings += hours * wage
+    }
+
+    if (day.customSettings && day.customSettings.length > 0) {
+      for (const setting of day.customSettings) {
+        if (setting.active) {
+          totalReimbursement += Number(setting.amount) || 0
+        }
+      }
+    } else {
+      if (day.travel) {
+        travelTotal += 2
+        totalReimbursement += Number(day.travelRate) || 20
+      }
+      if (day.carUsage) {
+        carAllowance += 1
+        totalReimbursement += Number(day.carAllowance) || 40
+      }
+    }
+
+    if (day.extraEarnings) {
+      totalExtraEarnings += Number(day.extraEarnings) || 0
+    }
   }
 
   return {
     totalHours: totalWorked,
     totalTravel: travelTotal,
-    dailyAllowance: carAllowance
+    dailyAllowance: carAllowance,
+    totalFixedPay,
+    hourlyEarnings,
+    totalReimbursement,
+    totalExtraEarnings
   }
 }
 
@@ -148,9 +179,30 @@ export function calculateCarUsage(days: WorkedDay[], month: number): number {
  * @returns Earnings for the specified day.
  */
 export function calculateDailyEarnings(day: WorkedDay): number {
-  return (
-    calculateTotalHours(day.timeSlots) * 10 +
-    (day.travel ? 2 * 10 : 0) +
-    (day.carUsage ? 40 : 0)
-  )
+  let total = 0
+  if (day.payMode === 'fixed') {
+    total = Number(day.fixedPrice) || 0
+  } else {
+    const wage = Number(day.hourlyWage) || 10
+    const hours = calculateTotalHours(day.timeSlots)
+    total = hours * wage
+  }
+
+  if (day.customSettings && day.customSettings.length > 0) {
+    for (const setting of day.customSettings) {
+      if (setting.active) {
+        total += Number(setting.amount) || 0
+      }
+    }
+  } else {
+    const travelAmt = day.travel ? (Number(day.travelRate) || 20) : 0
+    const carAmt = day.carUsage ? (Number(day.carAllowance) || 40) : 0
+    total += travelAmt + carAmt
+  }
+
+  if (day.extraEarnings) {
+    total += Number(day.extraEarnings) || 0
+  }
+
+  return total
 }
