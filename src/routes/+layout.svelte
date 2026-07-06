@@ -135,27 +135,29 @@
   </main>
 
   <!-- Mobile sticky floating bottom navigation bar -->
-  <div class="fixed bottom-0 left-0 right-0 z-40 px-4 pb-4 md:hidden">
-    <div class="mx-auto max-w-md bg-white/90 dark:bg-slate-950/90 backdrop-blur-md rounded-2xl border dark:border-slate-850 shadow-xl flex justify-around items-center py-2 px-2">
-      {#each links as single}
-        {@const isHome = single.link === 'home'}
-        {@const path = isHome ? '/' : `/${single.link}`}
-        <a
-          href={`./${isHome ? '' : single.link}`}
-          class="flex flex-col items-center gap-0.5 text-[9px] font-black transition-all py-1 px-2.5 rounded-xl active:scale-95 {activeRoute === path ? 'text-green-600 bg-green-50/50 dark:bg-green-950/30' : 'text-gray-400 dark:text-gray-500'}"
-        >
-          {#if single.label === 'home'}
-            <span class="text-lg">🏠</span>
-          {:else if single.label === 'statistiche'}
-            <span class="text-lg">📊</span>
-          {:else if single.label === 'aziende'}
-            <span class="text-lg">🏢</span>
-          {/if}
-          <span class="capitalize">{single.label}</span>
-        </a>
-      {/each}
+  {#if !showUpdatesModal}
+    <div class="fixed bottom-0 left-0 right-0 z-40 px-4 pb-4 md:hidden">
+      <div class="mx-auto max-w-md bg-white/90 dark:bg-slate-950/90 backdrop-blur-md rounded-2xl border dark:border-slate-850 shadow-xl flex justify-around items-center py-2 px-2">
+        {#each links as single}
+          {@const isHome = single.link === 'home'}
+          {@const path = isHome ? '/' : `/${single.link}`}
+          <a
+            href={`./${isHome ? '' : single.link}`}
+            class="flex flex-col items-center gap-0.5 text-[9px] font-black transition-all py-1 px-2.5 rounded-xl active:scale-95 {activeRoute === path ? 'text-green-600 bg-green-50/50 dark:bg-green-950/30' : 'text-gray-400 dark:text-gray-500'}"
+          >
+            {#if single.label === 'home'}
+              <span class="text-lg">🏠</span>
+            {:else if single.label === 'statistiche'}
+              <span class="text-lg">📊</span>
+            {:else if single.label === 'aziende'}
+              <span class="text-lg">🏢</span>
+            {/if}
+            <span class="capitalize">{single.label}</span>
+          </a>
+        {/each}
+      </div>
     </div>
-  </div>
+  {/if}
 
   <!-- Toast Notification Overlay -->
   {#if $toasts.length > 0}
@@ -181,9 +183,7 @@
   {/if}
 {/if}
 
-{#await import('$lib/ReloadPrompt.svelte') then { default: ReloadPrompt }}
-  <ReloadPrompt />
-{/await}
+
 
 <!-- Portal stuff for menu -->
 {#if showPortal}

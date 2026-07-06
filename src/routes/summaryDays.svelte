@@ -7,6 +7,7 @@
   } from '$lib/utils/timeTrackingUtils'
   import type { WorkedDay, Company } from '../types'
   import { DB } from '$lib/database'
+  import { toasts } from '$lib/toast'
 
   let workedDays: WorkedDay[] = $state([])
   let companies: Company[] = $state([])
@@ -50,9 +51,17 @@
   }
 
   async function deleteWorkedDay(workedDay: WorkedDay) {
-    if (confirm('Sei sicuro di voler eliminare questo turno?')) {
-      await DB.deleteWorkedDay(workedDay)
-      workedDays = (await DB.getWorkedDays()) ?? []
+    const formattedDate = format(workedDay.date, 'dd/MM/yyyy')
+    if (confirm(`Sei sicuro di voler eliminare definitivamente questo giorno lavorato (${formattedDate})?`)) {
+      try {
+        await DB.deleteWorkedDay(workedDay)
+        toasts.show(`Giorno lavorato del ${formattedDate} eliminato! 🗑️`, "success")
+        editDate = -1
+        editingGiorno = null
+        workedDays = (await DB.getWorkedDays()) ?? []
+      } catch (e: any) {
+        toasts.show("Errore durante l'eliminazione: " + (e.message || String(e)), "error")
+      }
     }
   }
 
@@ -99,7 +108,7 @@
     {/if}
 
     <div
-      class="mb-4 flex bg-white p-4 shadow-sm rounded-2xl border dark:border-slate-800 dark:bg-slate-900 dark:text-white hover:shadow-md transition"
+      class="mb-4 flex flex-col sm:flex-row bg-white p-4 shadow-sm rounded-2xl border dark:border-slate-800 dark:bg-slate-900 dark:text-white hover:shadow-md transition gap-4 sm:gap-0"
     >
       <div class="flex-1">
         <div class="flex items-center justify-between rounded-lg">
@@ -297,19 +306,31 @@
                     />
                   </div>
 
-                  <div class="flex gap-2 justify-end mt-4 pt-2.5 border-t dark:border-slate-850">
+                  <div class="flex gap-2 items-center justify-between mt-4 pt-2.5 border-t dark:border-slate-850">
                     <button
-                      class="rounded-xl border px-3.5 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-slate-750 dark:text-gray-300 dark:hover:bg-slate-800 transition active:scale-95"
-                      onclick={() => { editDate = -1; editingGiorno = null; originalDateStr = ''; editDateString = ''; }}
+                      type="button"
+                      class="rounded-xl bg-red-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-red-700 transition active:scale-95"
+                      onclick={() => deleteWorkedDay(editingGiorno!)}
                     >
-                      Annulla
+                      Elimina Giorno
                     </button>
-                    <button
-                      class="rounded-xl bg-green-600 px-4 py-2 text-xs font-bold text-white hover:bg-green-700 transition active:scale-95"
-                      onclick={() => salvaModifiche(editingGiorno!)}
-                    >
-                      Salva
-                    </button>
+                    
+                    <div class="flex gap-2">
+                      <button
+                        type="button"
+                        class="rounded-xl border px-3.5 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-slate-750 dark:text-gray-300 dark:hover:bg-slate-800 transition active:scale-95"
+                        onclick={() => { editDate = -1; editingGiorno = null; originalDateStr = ''; editDateString = ''; }}
+                      >
+                        Annulla
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-xl bg-green-600 px-4 py-2 text-xs font-bold text-white hover:bg-green-700 transition active:scale-95"
+                        onclick={() => salvaModifiche(editingGiorno!)}
+                      >
+                        Salva
+                      </button>
+                    </div>
                   </div>
                 </div>
               {/if}
@@ -318,7 +339,7 @@
         </div>
 
         <!-- Time slots -->
-        <div class="mt-2 flex flex-col gap-1.5">
+        <div class="mt-3 flex flex-wrap gap-2">
           {#each giorno.timeSlots as fascia, index}
             <div class="flex items-center gap-2">
               {#if editandoIndex !== index || giornoPerFasce !== idx}
@@ -330,33 +351,35 @@
                 </button>
               {:else}
                 <!-- Time slot inputs during editing -->
-                <div class="flex items-center gap-1.5 flex-wrap">
+                <div class="flex items-center gap-1.5 flex-wrap bg-gray-50 dark:bg-slate-950 p-2.5 rounded-xl border dark:border-slate-850">
                   <input
                     type="time"
-                    class="rounded border border-gray-300 p-1 text-xs text-gray-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
+                    class="rounded-lg border border-gray-300 p-1 text-xs text-gray-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
                     bind:value={fascia.start}
                   />
                   <span class="text-xs">-</span>
                   <input
                     type="time"
-                    class="rounded border border-gray-300 p-1 text-xs text-gray-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
+                    class="rounded-lg border border-gray-300 p-1 text-xs text-gray-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-mono"
                     bind:value={fascia.end}
                   />
-                  <button
-                    class="rounded bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700"
-                    onclick={() => salvaModifiche(giorno)}
-                  >
-                    Salva
-                  </button>
-                  <button
-                    class="rounded bg-red-650 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-750"
-                    onclick={() => {
-                      giorno.timeSlots.splice(index, 1)
-                      salvaModifiche(giorno)
-                    }}
-                  >
-                    Elimina
-                  </button>
+                  <div class="flex gap-1.5 mt-1 sm:mt-0">
+                    <button
+                      class="rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700 active:scale-95 transition"
+                      onclick={() => salvaModifiche(giorno)}
+                    >
+                      Salva
+                    </button>
+                    <button
+                      class="rounded-lg bg-red-650 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-750 active:scale-95 transition"
+                      onclick={() => {
+                        giorno.timeSlots.splice(index, 1)
+                        salvaModifiche(giorno)
+                      }}
+                    >
+                      Elimina
+                    </button>
+                  </div>
                 </div>
               {/if}
             </div>
@@ -366,51 +389,49 @@
         <div class="mt-4 flex gap-2">
           <button
             onclick={() => deleteWorkedDay(giorno)}
-            class="rounded-xl bg-red-650 px-3.5 py-2 text-xs font-bold text-white hover:bg-red-750 transition active:scale-95"
+            class="rounded-xl bg-red-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-red-700 transition active:scale-95"
           >
-            Elimina Turno
+            Elimina Giorno
           </button>
         </div>
       </div>
 
       <!-- Financial breakdown column -->
-      <div class="ml-4 flex items-stretch text-right pl-4 border-l dark:border-slate-800">
-        <div class="flex flex-col text-green-600 dark:text-green-400 text-xs justify-between font-mono">
-          <div class="flex flex-col gap-0.5">
-            {#if displayGiorno.payMode === 'fixed'}
-              <span class="font-sans font-semibold text-gray-600 dark:text-gray-300">Paga Fissa</span>
-              <span class="text-sm font-bold">€ {displayGiorno.fixedPrice}</span>
+      <div class="border-t sm:border-t-0 sm:border-l pt-3 sm:pt-0 sm:pl-4 flex flex-col justify-between dark:border-slate-800 text-left sm:text-right min-w-[160px]">
+        <div class="flex flex-col text-green-600 dark:text-green-400 text-xs gap-0.5 font-mono">
+          {#if displayGiorno.payMode === 'fixed'}
+            <span class="font-sans font-extrabold text-gray-600 dark:text-gray-300">Paga Fissa</span>
+            <span class="text-sm font-bold">€ {displayGiorno.fixedPrice}</span>
+          {:else}
+            {@const wage = displayGiorno.hourlyWage ?? 10}
+            <span class="font-sans font-extrabold text-gray-600 dark:text-gray-300">Dettaglio Paga</span>
+            <span>Ore: € {calculateTotalHours(displayGiorno.timeSlots) * wage} ({wage}€/h)</span>
+            {#if displayGiorno.customSettings && displayGiorno.customSettings.length > 0}
+              {#each displayGiorno.customSettings as setting}
+                {#if setting.active}
+                  <span>{setting.name}: +€ {setting.amount}</span>
+                {/if}
+              {/each}
             {:else}
-              {@const wage = displayGiorno.hourlyWage ?? 10}
-              <span class="font-sans font-semibold text-gray-600 dark:text-gray-300">Dettaglio Paga</span>
-              <span>Ore: € {calculateTotalHours(displayGiorno.timeSlots) * wage} ({wage}€/h)</span>
-              {#if displayGiorno.customSettings && displayGiorno.customSettings.length > 0}
-                {#each displayGiorno.customSettings as setting}
-                  {#if setting.active}
-                    <span>{setting.name}: +€ {setting.amount}</span>
-                  {/if}
-                {/each}
-              {:else}
-                {@const travelRate = displayGiorno.travelRate ?? 20}
-                {@const carAllowance = displayGiorno.carAllowance ?? 40}
-                {#if displayGiorno.travel}
-                  <span>Viaggio: +€ {travelRate}</span>
-                {/if}
-                {#if displayGiorno.carUsage}
-                  <span>Macchina: +€ {carAllowance}</span>
-                {/if}
+              {@const travelRate = displayGiorno.travelRate ?? 20}
+              {@const carAllowance = displayGiorno.carAllowance ?? 40}
+              {#if displayGiorno.travel}
+                <span>Viaggio: +€ {travelRate}</span>
+              {/if}
+              {#if displayGiorno.carUsage}
+                <span>Macchina: +€ {carAllowance}</span>
               {/if}
             {/if}
-            {#if displayGiorno.extraEarnings}
-              <span>Extra: +€ {displayGiorno.extraEarnings}</span>
-            {/if}
-          </div>
-          <div class="mt-auto pt-2 border-t dark:border-slate-800">
-            <span class="text-[10px] text-gray-500 dark:text-gray-400 block font-sans uppercase">Totale</span>
-            <span class="text-lg font-bold text-green-600 dark:text-green-400">
-              € {calculateDailyEarnings(displayGiorno)}
-            </span>
-          </div>
+          {/if}
+          {#if displayGiorno.extraEarnings}
+            <span>Extra: +€ {displayGiorno.extraEarnings}</span>
+          {/if}
+        </div>
+        <div class="mt-3 sm:mt-auto pt-2 border-t dark:border-slate-800 flex sm:block justify-between items-center">
+          <span class="text-[10px] text-gray-500 dark:text-gray-400 font-sans uppercase font-black">Totale Giorno</span>
+          <span class="text-lg font-black text-green-600 dark:text-green-400 block sm:inline">
+            € {calculateDailyEarnings(displayGiorno)}
+          </span>
         </div>
       </div>
     </div>
