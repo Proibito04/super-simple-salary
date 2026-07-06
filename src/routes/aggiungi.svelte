@@ -1,10 +1,10 @@
 <script lang="ts">
-
   import { getContext, onMount } from 'svelte'
   import { format } from 'date-fns'
   import { DB } from '$lib/database'
   import { toasts } from '$lib/toast'
   import { editingDay } from '$lib/store'
+  import { t } from '$lib/i18n'
   import type { TimeSlot, WorkedDay, Company, ActiveCustomSetting } from '../types'
 
   const { toggleAggiungi } = getContext<{ toggleAggiungi: () => void }>('vision')
@@ -75,13 +75,13 @@
     const ed = $editingDay
     if (!ed) return
     const formattedDate = format(ed.date, 'dd/MM/yyyy')
-    if (confirm(`Sei sicuro di voler eliminare definitivamente questo giorno lavorato (${formattedDate})?`)) {
+    if (confirm(`${$t('confirmDeleteDay')} (${formattedDate})`)) {
       try {
         await DB.deleteWorkedDay(ed)
-        toasts.show(`Giorno lavorato del ${formattedDate} eliminato! 🗑️`, "success")
+        toasts.show(`${$t('dayDeleted')} (${formattedDate})`, "success")
         toggleAggiungi()
       } catch (e: any) {
-        toasts.show("Errore durante l'eliminazione: " + (e.message || String(e)), "error")
+        toasts.show($t('errorDelete') + ": " + (e.message || String(e)), "error")
       }
     }
   }
@@ -94,7 +94,7 @@
     const validTimeSlots = fasceOrarie.filter(f => f.start && f.end);
     
     if (validTimeSlots.length === 0 && payMode === 'hourly') {
-      toasts.show("Inserisci almeno una fascia oraria completa (inizio e fine)!", "error");
+      toasts.show($t('enterValidTimeSlot'), "error");
       return;
     }
 
@@ -120,10 +120,10 @@
       }
       
       await DB.addWorkedDay(newWorkedDay)
-      toasts.show($editingDay ? "Turno aggiornato con successo! 💾" : "Turno salvato con successo! 🎉", "success");
+      toasts.show($editingDay ? $t('shiftUpdated') : $t('shiftSaved'), "success");
       toggleAggiungi()
     } catch (e: any) {
-      toasts.show("Errore durante il salvataggio: " + (e.message || String(e)), "error");
+      toasts.show($t('errorSaving') + ": " + (e.message || String(e)), "error");
       console.error(e);
     }
   }
@@ -132,20 +132,20 @@
 <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
   <form
     onsubmit={salvaGiornoLavorato}
-    class="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl border dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+    class="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl border dark:border-slate-800 dark:bg-slate-900 dark:text-white font-sans"
   >
     <div class="flex items-center justify-between border-b pb-3 mb-5">
-      <h2 class="text-xl font-black text-gray-900 dark:text-white">{$editingDay ? 'Modifica Giorno' : 'Aggiungi Turno'}</h2>
+      <h2 class="text-xl font-black text-gray-900 dark:text-white">{$editingDay ? $t('editDay') : $t('add')}</h2>
       <button
         type="button"
         class="rounded-xl border px-3 py-1.5 text-xs font-bold hover:bg-gray-100 dark:border-slate-800 dark:hover:bg-slate-800 transition"
-        onclick={toggleAggiungi}>Chiudi</button
+        onclick={toggleAggiungi}>{$t('close')}</button
       >
     </div>
 
     <!-- Giorno -->
     <div class="mb-4">
-      <label for="giorno" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Giorno:</label>
+      <label for="giorno" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">{$t('day')}:</label>
       <input
         type="date"
         bind:value={giorno}
@@ -156,37 +156,37 @@
 
     <!-- Azienda Selection -->
     <div class="mb-4">
-      <label for="company" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Azienda (Catering/Ristorante):</label>
+      <label for="company" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">{$t('company')}:</label>
       <select
         bind:value={selectedCompanyId}
         id="company"
         class="w-full rounded-xl border border-gray-300 p-2.5 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
       >
-        <option value="">Nessuna azienda (Paga standard)</option>
+        <option value="">{$t('noCompany')}</option>
         {#each companies as comp}
-          <option value={comp.id}>{comp.name} (Paga: €{comp.hourlyWage}/h)</option>
+          <option value={comp.id}>{comp.name} ({$t('hours')}: €{comp.hourlyWage}/h)</option>
         {/each}
       </select>
     </div>
 
     <!-- Modalità di Pagamento -->
     <div class="mb-4">
-      <span class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Modalità di Pagamento:</span>
+      <span class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">{$t('payMode')}:</span>
       <div class="flex gap-6 mt-1">
         <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer font-bold">
           <input type="radio" bind:group={payMode} value="hourly" class="h-4 w-4 text-green-600 focus:ring-green-500" />
-          Ore + Rimborsi
+          {$t('hoursAllowance')}
         </label>
         <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer font-bold">
           <input type="radio" bind:group={payMode} value="fixed" class="h-4 w-4 text-green-600 focus:ring-green-500" />
-          Prezzo Fisso (Flat)
+          {$t('fixedAllowance')}
         </label>
       </div>
     </div>
 
     <!-- Rimborsi / Indennità disponibili -->
     <div class="mb-4 rounded-2xl border p-4 dark:border-slate-800 dark:bg-slate-950 flex flex-col gap-3">
-      <span class="block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Rimborsi / Indennità:</span>
+      <span class="block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">{$t('allowances')}:</span>
       {#if activeCustomSettings.length > 0}
         {#each activeCustomSettings as setting}
           <div class="flex items-center gap-3">
@@ -202,7 +202,7 @@
               </label>
               {#if setting.active}
                 <div class="flex items-center gap-2 mt-1.5">
-                  <span class="text-xs text-gray-400">Importo (€):</span>
+                  <span class="text-xs text-gray-400">{$t('amount')} (€):</span>
                   <input
                     type="number"
                     bind:value={setting.amount}
@@ -216,14 +216,14 @@
           </div>
         {/each}
       {:else}
-        <span class="text-xs text-gray-500 dark:text-gray-400">Nessun rimborso configurato per questa azienda.</span>
+        <span class="text-xs text-gray-500 dark:text-gray-400">{$t('noAllowances')}</span>
       {/if}
     </div>
 
     <!-- Paga Prezzo Fisso -->
     {#if payMode === 'fixed'}
       <div class="mb-4">
-        <label for="fixedPrice" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Importo Fisso (€):</label>
+        <label for="fixedPrice" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">{$t('fixedAmount')}:</label>
         <input
           type="number"
           bind:value={fixedPrice}
@@ -237,7 +237,7 @@
 
     <!-- Extra / Mance -->
     <div class="mb-4">
-      <label for="extraEarnings" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Entrate Extra (Mance, bonus, ecc...):</label>
+      <label for="extraEarnings" class="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">{$t('extraEarnings')}:</label>
       <input
         type="number"
         bind:value={extraEarnings}
@@ -252,13 +252,13 @@
     <!-- Fasce Orarie -->
     <div class="mb-5 border-t pt-4 dark:border-slate-800">
       <span class="mb-3 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-        Fasce Orarie lavorate (per tracciare le ore):
+        {$t('timeSlotsText')}
       </span>
       
       {#each fasceOrarie as fascia, index}
         <div class="mb-3 grid grid-cols-3 gap-2.5 items-end">
           <div>
-            <label for={`inizio-${index}`} class="block text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1">Inizio:</label>
+            <label for={`inizio-${index}`} class="block text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1">{$t('start')}:</label>
             <input
               type="time"
               bind:value={fascia.start}
@@ -268,7 +268,7 @@
             />
           </div>
           <div>
-            <label for={`fine-${index}`} class="block text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1">Fine:</label>
+            <label for={`fine-${index}`} class="block text-[10px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1">{$t('end')}:</label>
             <input
               type="time"
               bind:value={fascia.end}
@@ -283,7 +283,7 @@
               onclick={() => rimuoviFasciaOraria(index)}
               class="w-full rounded-xl bg-red-600 py-2 font-bold text-sm text-white hover:bg-red-700 active:scale-95 transition shadow-sm"
             >
-              Rimuovi
+              {$t('remove')}
             </button>
           </div>
         </div>
@@ -294,7 +294,7 @@
         type="button"
         class="mt-2 text-xs text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 font-extrabold uppercase tracking-wider transition"
       >
-        + Aggiungi fascia oraria
+        {$t('addTimeSlot')}
       </button>
     </div>
 
@@ -306,7 +306,7 @@
           class="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 transition active:scale-95 mr-auto"
           onclick={eliminaGiornoCorrente}
         >
-          Elimina Giorno
+          {$t('deleteDay')}
         </button>
       {/if}
       <button
@@ -314,13 +314,13 @@
         class="rounded-xl border px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 dark:border-slate-750 dark:text-gray-300 dark:hover:bg-slate-800 transition active:scale-95"
         onclick={toggleAggiungi}
       >
-        Annulla
+        {$t('cancel')}
       </button>
       <button
         type="submit"
         class="rounded-xl bg-green-600 px-5 py-2 text-sm font-bold text-white hover:bg-green-700 shadow-md active:scale-95 transition"
       >
-        {$editingDay ? 'Salva Modifiche' : 'Salva Turno'}
+        {$editingDay ? $t('saveChanges') : $t('saveShift')}
       </button>
     </div>
   </form>

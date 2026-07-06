@@ -5,12 +5,14 @@
   import { AppBar } from '@skeletonlabs/skeleton'
   import IconAccessibility from '~icons/solar/hamburger-menu-outline'
   import { setDefaultOptions } from 'date-fns'
-  import { it } from 'date-fns/locale'
+  import { enUS, fr, it as itLocale } from 'date-fns/locale'
   import { page } from '$app/stores'
   import { toasts } from '$lib/toast'
   import Portal from './Portal.svelte'
   import Aggiungi from './aggiungi.svelte'
   import { editingDay } from '$lib/store'
+  import { initLang, t, currentLang, changeLang } from '$lib/i18n'
+
   interface Props {
     children?: import('svelte').Snippet;
   }
@@ -56,10 +58,10 @@
         ]
       }
       await DB.addCompany(JSON.parse(JSON.stringify(gourmetPreset)))
-      toasts.show("Preset Gourmet in Villa importato! 🏰🎉", "success")
+      toasts.show($t('gourmetSuccess'), "success")
       closeUpdatesModal()
     } catch (e: any) {
-      toasts.show("Errore durante l'importazione: " + (e.message || String(e)), "error")
+      toasts.show($t('gourmetError') + ": " + (e.message || String(e)), "error")
     }
   }
 
@@ -68,11 +70,23 @@
     showUpdatesModal = false
   }
 
-  setDefaultOptions({ locale: it })
+  // Reactive date-fns locale switcher based on current Lang
+  $effect(() => {
+    const lang = $currentLang;
+    if (lang === 'en') {
+      setDefaultOptions({ locale: enUS })
+    } else if (lang === 'fr') {
+      setDefaultOptions({ locale: fr })
+    } else {
+      setDefaultOptions({ locale: itLocale })
+    }
+  })
+
   setContext('vision', { toggleAggiungi })
 
   onMount(async () => {
     try {
+      initLang()
       const DB = (await import('$lib/database')).DB
       await DB.startDatabase()
       loaded = true
@@ -100,7 +114,9 @@
     <p class="text-sm mt-2 text-gray-500">Prova a ricaricare la pagina o controlla di non avere più schede dell'app aperte.</p>
   </div>
 {:else if !loaded}
-  <h1>Caricamento in corso...</h1>
+  <div class="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
+    <h1 class="text-sm font-black text-gray-400 dark:text-gray-500 tracking-wider uppercase animate-pulse">Caricamento in corso...</h1>
+  </div>
 {:else}
   {#if visibleAdd || $editingDay}
     <Aggiungi />
@@ -122,7 +138,7 @@
               href={`./${isHome ? '' : single.link}`}
               class="text-xs font-black px-3 py-1.5 rounded-xl transition hover:bg-green-50 dark:hover:bg-green-950/20 hover:text-green-600 {activeRoute === path ? 'text-green-600 bg-green-50 dark:bg-green-950/30' : 'text-gray-500 dark:text-gray-400'}"
             >
-              <span class="capitalize">{single.label === 'Payment History' ? 'Pagamenti' : single.label}</span>
+              <span class="capitalize">{$t(single.link === 'home' ? 'home' : (single.link === 'statistiche' ? 'stats' : 'companies'))}</span>
             </a>
           {/each}
         </nav>
@@ -133,12 +149,37 @@
     
     {#snippet trail()}
       <button class="rounded-xl bg-green-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-green-700 shadow-md active:scale-95 transition" onclick={() => (visibleAdd = true)}>
-        Aggiungi
+        {$t('add')}
       </button>
     {/snippet}
   </AppBar>
   <main class="m-auto px-2 lg:w-1/2 pb-24 md:pb-6">
     {@render children?.()}
+
+    <!-- Footer Language Selector -->
+    <footer class="mt-12 mb-6 border-t dark:border-slate-850 pt-6 text-center flex flex-col items-center gap-2">
+      <span class="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider">{$t('selectLanguage')}</span>
+      <div class="flex gap-2">
+        <button
+          onclick={() => changeLang('it')}
+          class="px-2.5 py-1 text-xs font-black rounded-lg border transition {$currentLang === 'it' ? 'bg-green-600 border-green-600 text-white shadow-sm' : 'border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-slate-800 dark:text-gray-400 dark:hover:bg-slate-900'}"
+        >
+          🇮🇹 Italiano
+        </button>
+        <button
+          onclick={() => changeLang('en')}
+          class="px-2.5 py-1 text-xs font-black rounded-lg border transition {$currentLang === 'en' ? 'bg-green-600 border-green-600 text-white shadow-sm' : 'border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-slate-800 dark:text-gray-400 dark:hover:bg-slate-900'}"
+        >
+          🇬🇧 English
+        </button>
+        <button
+          onclick={() => changeLang('fr')}
+          class="px-2.5 py-1 text-xs font-black rounded-lg border transition {$currentLang === 'fr' ? 'bg-green-600 border-green-600 text-white shadow-sm' : 'border-gray-200 text-gray-500 hover:bg-gray-50 dark:border-slate-800 dark:text-gray-400 dark:hover:bg-slate-900'}"
+        >
+          🇫🇷 Français
+        </button>
+      </div>
+    </footer>
   </main>
 
   <!-- Mobile sticky floating bottom navigation bar -->
@@ -159,7 +200,7 @@
             {:else if single.label === 'aziende'}
               <span class="text-lg">🏢</span>
             {/if}
-            <span class="capitalize">{single.label}</span>
+            <span class="capitalize">{$t(single.link === 'home' ? 'home' : (single.link === 'statistiche' ? 'stats' : 'companies'))}</span>
           </a>
         {/each}
       </div>
@@ -190,121 +231,58 @@
   {/if}
 {/if}
 
-
-
-<!-- Portal stuff for menu -->
-{#if showPortal}
-  <Portal>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-    <div
-      class="fixed inset-0 z-50 flex justify-start bg-slate-900/60 backdrop-blur-sm"
-      onclick={() => (showPortal = false)}
-      role="button"
-      tabindex="-1"
-    >
-      <!-- Menu panel -->
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="w-[280px] h-full bg-white dark:bg-slate-950 dark:text-white p-6 shadow-2xl flex flex-col"
-        onclick={(e) => e.stopPropagation()}
-      >
-        <div class="flex justify-between items-center pb-5 border-b dark:border-slate-800">
-          <span class="text-lg font-black text-gray-900 dark:text-white">Menù</span>
-          <button
-            class="text-sm font-bold text-gray-400 hover:text-gray-600 dark:hover:text-white transition"
-            onclick={() => (showPortal = false)}
-          >
-            Chiudi
-          </button>
-        </div>
-
-        <nav class="mt-6 flex flex-col gap-1.5">
-          {#each links as single}
-            <a
-              href={`./${single.link == 'home' ? '' : single.link}`}
-              class="flex items-center gap-3 px-4 py-3 rounded-2xl font-extrabold text-sm text-gray-700 dark:text-gray-200 hover:bg-green-50 dark:hover:bg-green-950/30 hover:text-green-600 dark:hover:text-green-400 transition"
-              onclick={() => (showPortal = false)}
-            >
-              {#if single.label === 'home'}
-                <span>🏠</span>
-              {:else if single.label === 'storico'}
-                <span>📅</span>
-              {:else if single.label === 'statistiche'}
-                <span>📊</span>
-              {:else if single.label === 'Payment History'}
-                <span>💰</span>
-              {:else if single.label === 'aziende'}
-                <span>🏢</span>
-              {:else}
-                <span>🔗</span>
-              {/if}
-              <span class="capitalize">{single.label === 'Payment History' ? 'Pagamenti' : single.label}</span>
-            </a>
-          {/each}
-        </nav>
-      </div>
-    </div>
-  </Portal>
-{/if}
-
 {#if showUpdatesModal}
   <Portal>
     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md overflow-y-auto">
-      <div class="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl border dark:border-slate-800 dark:bg-slate-900 dark:text-white">
+      <div class="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl border dark:border-slate-800 dark:bg-slate-900 dark:text-white font-sans">
         <!-- Header -->
         <div class="text-center mb-6">
           <span class="text-4xl">🎉 🥳 ✨</span>
-          <h2 class="text-2xl font-black mt-2 text-gray-900 dark:text-white">Aggiornamento Applicazione! 🚀</h2>
-          <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Ecco le fantastiche novità introdotte 🎉</p>
+          <h2 class="text-2xl font-black mt-2 text-gray-900 dark:text-white">{$t('welcomeTitle')}</h2>
+          <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">{$t('welcomeSubtitle')}</p>
         </div>
 
         <!-- Updates List -->
         <div class="flex flex-col gap-3 mb-6 bg-slate-50 dark:bg-slate-950/40 p-4 rounded-2xl border dark:border-slate-850">
-          <h3 class="text-sm font-black text-green-600 dark:text-green-400 uppercase tracking-wider">Cosa è stato migliorato:</h3>
+          <h3 class="text-sm font-black text-green-600 dark:text-green-400 uppercase tracking-wider">{$t('welcomeSubtitle')}</h3>
           
           <div class="flex gap-2.5 items-start text-xs">
-            <span>🟢</span>
-            <div>
-              <strong class="text-gray-800 dark:text-gray-200">Nuovo Tema Verde e Moderno:</strong>
-              <p class="text-gray-500 dark:text-gray-400">Interfaccia rinfrescata con angoli arrotondati, icone eleganti e tonalità verdi coerenti.</p>
-            </div>
+            <span>🎨</span>
+            <p class="text-gray-600 dark:text-gray-400 font-bold">{$t('welcomeItem1')}</p>
           </div>
           <div class="flex gap-2.5 items-start text-xs">
-            <span>📝</span>
-            <div>
-              <strong class="text-gray-800 dark:text-gray-200">Rimborsi Dinamici:</strong>
-              <p class="text-gray-500 dark:text-gray-400">Inserisci rimborsi spese diversi e personalizzabili per ogni azienda in modo flessibile.</p>
-            </div>
+            <span>🚗</span>
+            <p class="text-gray-600 dark:text-gray-400 font-bold">{$t('welcomeItem2')}</p>
           </div>
           <div class="flex gap-2.5 items-start text-xs">
             <span>📊</span>
-            <div>
-              <strong class="text-gray-800 dark:text-gray-200">Report Singoli per Azienda:</strong>
-              <p class="text-gray-500 dark:text-gray-400">Calcoli orari mensili divisi per ogni locale e possibilità di copiare la singola lista dei turni per inviarla direttamente su WhatsApp.</p>
-            </div>
+            <p class="text-gray-600 dark:text-gray-400 font-bold">{$t('welcomeItem3')}</p>
           </div>
           <div class="flex gap-2.5 items-start text-xs">
             <span>📱</span>
-            <div>
-              <strong class="text-gray-800 dark:text-gray-200">Barra Mobile-First in Basso:</strong>
-              <p class="text-gray-500 dark:text-gray-400">Naviga l'app in totale comodità su cellulare grazie al menù basso a portata di dito.</p>
-            </div>
+            <p class="text-gray-600 dark:text-gray-400 font-bold">{$t('welcomeItem4')}</p>
+          </div>
+          <div class="flex gap-2.5 items-start text-xs">
+            <span>🔔</span>
+            <p class="text-gray-600 dark:text-gray-400 font-bold">{$t('welcomeItem5')}</p>
+          </div>
+          <div class="flex gap-2.5 items-start text-xs">
+            <span>🛠️</span>
+            <p class="text-gray-600 dark:text-gray-400 font-bold">{$t('welcomeItem6')}</p>
           </div>
         </div>
 
         <!-- Gourmet in Villa Section -->
         <div class="mb-6 p-4 rounded-2xl border border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-950/20 text-center">
-          <h4 class="text-sm font-black text-green-700 dark:text-green-300">🏰 Sei di Gourmet in Villa? 🏰</h4>
-          <p class="text-xs text-green-600 dark:text-green-400 mt-1 mb-3">
-            C'è questa predisposizione per te! Clicca il bottone qui sotto per configurare in automatico l'azienda con tutti i rimborsi necessari.
+          <h4 class="text-sm font-black text-green-700 dark:text-green-300">🏰 {$t('gourmetSection')} 🏰</h4>
+          <p class="text-xs text-green-600 dark:text-green-400 mt-1 mb-3 font-semibold">
+            {$t('gourmetDescription')}
           </p>
           <button
             onclick={importGourmetPreset}
             class="mx-auto rounded-xl bg-green-600 hover:bg-green-700 px-5 py-2.5 text-xs font-black text-white shadow-md active:scale-95 transition flex items-center justify-center gap-1.5"
           >
-            <span>🎉</span> Configura "Gourmet in Villa"
+            <span>🎉</span> {$t('gourmetButton')}
           </button>
         </div>
 
@@ -312,9 +290,9 @@
         <div class="flex justify-end gap-3 border-t pt-4 dark:border-slate-800">
           <button
             onclick={closeUpdatesModal}
-            class="rounded-xl border px-5 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 dark:border-slate-750 dark:text-gray-300 dark:hover:bg-slate-800 transition active:scale-95 w-full sm:w-auto"
+            class="rounded-xl border px-5 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 dark:border-slate-750 dark:text-gray-300 dark:hover:bg-slate-800 transition active:scale-95 w-full sm:w-auto bg-green-600 text-white hover:bg-green-700"
           >
-            Inizia a usare l'App! 🥳
+            {$t('startWorking')}
           </button>
         </div>
       </div>

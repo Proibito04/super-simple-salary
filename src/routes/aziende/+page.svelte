@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { DB } from '$lib/database'
   import { toasts } from '$lib/toast'
+  import { t } from '$lib/i18n'
   import type { Company } from '../../types'
 
   let companies: Company[] = $state([])
@@ -68,7 +69,7 @@
 
     try {
       await DB.addCompany(newCompany)
-      toasts.show(editingCompanyId ? "Azienda modificata con successo!" : "Azienda salvata con successo!", "success");
+      toasts.show($t('companySavedSuccess'), "success");
       newName = ''
       newHourlyWage = 10
       tempSettings = []
@@ -76,19 +77,19 @@
       editingCompanyId = null
       await loadCompanies()
     } catch (e: any) {
-      toasts.show("Errore durante il salvataggio dell'azienda: " + (e.message || String(e)), "error");
+      toasts.show("Error: " + (e.message || String(e)), "error");
       console.error(e);
     }
   }
 
   async function deleteCompany(id: string) {
-    if (confirm('Sei sicuro di voler eliminare questa azienda?')) {
+    if (confirm($t('confirmDeleteCompany'))) {
       try {
         await DB.deleteCompany(id)
-        toasts.show("Azienda eliminata con successo!", "success");
+        toasts.show($t('companyDeletedSuccess'), "success");
         await loadCompanies()
       } catch (e: any) {
-        toasts.show("Errore durante l'eliminazione: " + (e.message || String(e)), "error");
+        toasts.show("Error: " + (e.message || String(e)), "error");
       }
     }
   }
@@ -98,9 +99,9 @@
   })
 </script>
 
-<div class="m-auto my-5 p-4 lg:w-4/5 xl:w-2/3">
+<div class="m-auto my-5 p-4 lg:w-4/5 xl:w-2/3 font-sans">
   <div class="flex items-center justify-between border-b pb-4 dark:border-slate-800">
-    <h1 class="text-2xl font-black text-gray-900 dark:text-white">Aziende</h1>
+    <h1 class="text-2xl font-black text-gray-900 dark:text-white">{$t('companies')}</h1>
     <button
       class="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700 shadow-md active:scale-95 transition"
       onclick={() => {
@@ -113,74 +114,74 @@
         }
       }}
     >
-      {showAddForm ? 'Annulla' : 'Aggiungi Azienda'}
+      {showAddForm ? $t('cancel') : $t('addCompany')}
     </button>
   </div>
 
   {#if showAddForm}
     <div class="mt-5 rounded-2xl border bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <h2 class="mb-4 text-lg font-black dark:text-white">
-        {editingCompanyId ? 'Modifica Azienda' : 'Nuova Azienda'}
+      <h2 class="mb-4 text-lg font-black dark:text-white text-green-650">
+        {editingCompanyId ? $t('editCompany') : $t('addCompany')}
       </h2>
       <div class="flex flex-col gap-4">
         <!-- Company Name -->
         <div>
-          <label for="comp-name" class="block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Nome Azienda *</label>
+          <label for="comp-name" class="block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">{$t('companyNameLabel')} *</label>
           <input
             id="comp-name"
             type="text"
             bind:value={newName}
             class="mt-1.5 block w-full rounded-xl border border-gray-300 p-2.5 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-            placeholder="E.g., Ristorante Da Gianni"
+            placeholder="E.g., Gourmet in Villa"
             required
           />
         </div>
 
         <!-- Hourly Wage -->
         <div>
-          <label for="comp-wage" class="block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Paga Oraria Base (€)</label>
+          <label for="comp-wage" class="block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">{$t('hourlyWageLabel')}</label>
           <input
             id="comp-wage"
             type="number"
             bind:value={newHourlyWage}
             min="0"
             step="0.5"
-            class="mt-1.5 block w-[150px] rounded-xl border border-gray-300 p-2.5 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-bold"
+            class="mt-1.5 block w-[150px] rounded-xl border border-gray-300 p-2.5 text-sm text-gray-900 shadow-sm focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-bold font-mono"
           />
         </div>
 
         <!-- Dynamic Settings / Allowances Builder -->
         <div class="border-t pt-4 dark:border-slate-850">
-          <span class="block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Opzioni Rimborso/Indennità (Travel, Macchina, etc.)</span>
+          <span class="block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">{$t('customAllowancesLabel')}</span>
           
-          <div class="flex gap-2 items-end mb-4">
-            <div class="flex-1">
-              <label for="setting-name" class="block text-[10px] font-black uppercase text-gray-400 dark:text-gray-500">Nome Impostazione</label>
+          <div class="flex gap-2 items-end mb-4 flex-wrap sm:flex-nowrap">
+            <div class="flex-1 min-w-[200px]">
+              <label for="setting-name" class="block text-[10px] font-black uppercase text-gray-400 dark:text-gray-500">{$t('companyNameLabel')}</label>
               <input
                 id="setting-name"
                 type="text"
                 bind:value={nextSettingName}
-                placeholder="E.g. Spese Viaggio, Macchina, Lavaggio divisa"
+                placeholder={$t('allowanceNamePlaceholder')}
                 class="mt-1.5 block w-full rounded-xl border border-gray-300 p-2 text-sm text-gray-900 focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
               />
             </div>
             <div>
-              <label for="setting-amount" class="block text-[10px] font-black uppercase text-gray-400 dark:text-gray-500">Importo (€)</label>
+              <label for="setting-amount" class="block text-[10px] font-black uppercase text-gray-400 dark:text-gray-500">{$t('amount')} (€)</label>
               <input
                 id="setting-amount"
                 type="number"
                 bind:value={nextSettingAmount}
                 min="0"
                 step="1"
-                class="mt-1.5 block w-[100px] rounded-xl border border-gray-300 p-2 text-sm text-gray-900 focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-bold"
+                class="mt-1.5 block w-[100px] rounded-xl border border-gray-300 p-2 text-sm text-gray-900 focus:border-green-500 focus:ring-green-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white font-bold font-mono"
               />
             </div>
             <button
               type="button"
               onclick={addTempSetting}
-              class="rounded-xl bg-green-600 px-4 py-2 font-bold text-sm text-white hover:bg-green-700 h-[42px] active:scale-95 transition"
+              class="rounded-xl bg-green-600 px-4 py-2 font-bold text-sm text-white hover:bg-green-700 h-[42px] active:scale-95 transition w-full sm:w-auto mt-2 sm:mt-0"
             >
-              Aggiungi
+              {$t('add')}
             </button>
           </div>
 
@@ -188,14 +189,14 @@
           {#if tempSettings.length > 0}
             <div class="flex flex-col gap-2 bg-gray-50 dark:bg-slate-950 p-3 rounded border dark:border-slate-800">
               {#each tempSettings as setting, idx}
-                <div class="flex items-center justify-between text-sm">
+                <div class="flex items-center justify-between text-sm font-mono text-green-650">
                   <span class="dark:text-white">{setting.name}: <strong>€ {setting.amount}</strong></span>
                   <button
                     type="button"
                     onclick={() => removeTempSetting(idx)}
-                    class="text-red-500 hover:text-red-700 font-semibold"
+                    class="text-red-500 hover:text-red-750 font-bold"
                   >
-                    Rimuovi
+                    {$t('remove')}
                   </button>
                 </div>
               {/each}
@@ -215,13 +216,13 @@
               tempSettings = [];
             }}
           >
-            Annulla
+            {$t('cancel')}
           </button>
           <button
             class="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700 transition active:scale-95"
             onclick={saveCompany}
           >
-            Salva Azienda
+            {$t('save')}
           </button>
         </div>
       </div>
@@ -230,7 +231,7 @@
 
   <div class="mt-6 flex flex-col gap-4">
     {#if companies.length === 0}
-      <p class="text-center text-gray-500 dark:text-gray-400 py-10">Nessuna azienda salvata. Clicca su "Aggiungi Azienda" per iniziare.</p>
+      <p class="text-center text-gray-500 dark:text-gray-400 py-10 font-bold">{$t('noCompaniesYet')}</p>
     {:else}
       {#each companies as company}
         <div class="flex items-center justify-between rounded-2xl border bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-white hover:shadow-md transition">
@@ -242,11 +243,11 @@
               <h3 class="text-base font-extrabold">{company.name}</h3>
             </div>
             <div class="mt-1 flex flex-col gap-1 text-xs text-gray-500 dark:text-gray-400">
-              <span>Paga oraria base: <strong>€ {company.hourlyWage}/h</strong></span>
+              <span>{$t('hourlyWageLabel')}: <strong class="font-mono">€ {company.hourlyWage}/h</strong></span>
               {#if company.customSettings && company.customSettings.length > 0}
                 <div class="mt-2.5 flex flex-wrap gap-2">
                   {#each company.customSettings as setting}
-                    <span class="inline-block bg-green-50 text-green-800 text-[10px] px-2.5 py-1 rounded-full font-black dark:bg-green-950 dark:text-green-300">
+                    <span class="inline-block bg-green-50 text-green-800 text-[10px] px-2.5 py-1 rounded-full font-black dark:bg-green-950 dark:text-green-300 font-mono">
                       {setting.name}: € {setting.amount}
                     </span>
                   {/each}
@@ -259,14 +260,14 @@
               class="rounded-xl bg-green-600 hover:bg-green-700 px-3.5 py-2 text-xs font-bold text-white transition active:scale-95"
               onclick={() => editCompany(company)}
             >
-              Modifica
+              {$t('saveChanges')}
             </button>
             {#if company.id !== 'default'}
               <button
                 class="rounded-xl bg-red-600 hover:bg-red-700 px-3.5 py-2 text-xs font-bold text-white transition active:scale-95"
                 onclick={() => deleteCompany(company.id)}
               >
-                Elimina
+                {$t('remove')}
               </button>
             {/if}
           </div>

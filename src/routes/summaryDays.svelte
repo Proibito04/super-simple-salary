@@ -9,6 +9,7 @@
   import { DB } from '$lib/database'
   import { toasts } from '$lib/toast'
   import { editingDay } from '$lib/store'
+  import { t } from '$lib/i18n'
 
   let workedDays: WorkedDay[] = $state([])
   let companies: Company[] = $state([])
@@ -23,19 +24,18 @@
   })
 
   function modificaData(workedDay: WorkedDay) {
-    // Pass a copy of the worked day to avoid polluting the state directly before save
     editingDay.set(JSON.parse(JSON.stringify(workedDay)))
   }
 
   async function deleteWorkedDay(workedDay: WorkedDay) {
     const formattedDate = format(workedDay.date, 'dd/MM/yyyy')
-    if (confirm(`Sei sicuro di voler eliminare definitivamente questo giorno lavorato (${formattedDate})?`)) {
+    if (confirm(`${$t('confirmDeleteDay')} (${formattedDate})`)) {
       try {
         await DB.deleteWorkedDay(workedDay)
-        toasts.show(`Giorno lavorato del ${formattedDate} eliminato! 🗑️`, "success")
+        toasts.show(`${$t('dayDeleted')} (${formattedDate})`, "success")
         workedDays = (await DB.getWorkedDays()) ?? []
       } catch (e: any) {
-        toasts.show("Errore durante l'eliminazione: " + (e.message || String(e)), "error")
+        toasts.show($t('errorDelete') + ": " + (e.message || String(e)), "error")
       }
     }
   }
@@ -45,14 +45,14 @@
     try {
       await DB.addWorkedDay(giorno)
     } catch (e: any) {
-      toasts.show("Errore durante il salvataggio: " + (e.message || String(e)), "error")
+      toasts.show($t('errorSaving') + ": " + (e.message || String(e)), "error")
     }
   }
 </script>
 
 <div>
-  <p class="text-xs text-gray-500 mb-4">
-    Tip: clicca sulla data o sul pulsante "Modifica" per modificare il giorno, le aziende, le indennità e le fasce orarie.
+  <p class="text-xs text-gray-500 mb-4 font-semibold">
+    {$t('tipClickDate')}
   </p>
 
   {#each workedDays as giorno, idx}
@@ -84,21 +84,21 @@
                 {/if}
                 {#if giorno.payMode === 'fixed'}
                   <span class="bg-purple-100 text-purple-800 text-xs px-2 py-0.5 rounded font-medium dark:bg-purple-900 dark:text-purple-200">
-                    Fisso
+                    {$t('flat')}
                   </span>
                 {/if}
               </div>
 
               <span class="block text-xs font-light text-gray-500 dark:text-gray-300">
-                Ore lavorate: <strong>{calculateTotalHours(giorno.timeSlots)}</strong>
+                {$t('hoursWorked')}: <strong>{calculateTotalHours(giorno.timeSlots)}</strong>
               </span>
 
               {#if giorno.payMode === 'fixed'}
                 <span class="text-xs text-purple-600 dark:text-purple-400 font-semibold">
-                  Tariffa fissa: €{giorno.fixedPrice}
+                  {$t('fixedRate')}: €{giorno.fixedPrice}
                 </span>
               {:else}
-                <div class="flex flex-wrap gap-2 text-xs mt-1.5">
+                <div class="flex flex-wrap gap-2 text-xs mt-1.5 font-bold">
                   {#if giorno.customSettings && giorno.customSettings.length > 0}
                     {#each giorno.customSettings as setting}
                       <button
@@ -108,7 +108,7 @@
                           salvaModifiche(giorno)
                         }}
                       >
-                        {setting.name}: <strong class={setting.active ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}>{setting.active ? 'Sì' : 'No'}</strong>
+                        {setting.name}: <strong class={setting.active ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}>{setting.active ? $t('yes') : $t('no')}</strong>
                       </button>
                     {/each}
                   {/if}
@@ -133,7 +133,7 @@
             onclick={() => modificaData(giorno)}
             class="text-xs bg-green-50 hover:bg-green-100 text-green-700 dark:bg-green-950/20 dark:hover:bg-green-950/40 dark:text-green-300 px-2.5 py-1 rounded-xl border border-green-200 dark:border-green-900 font-black active:scale-95 transition flex items-center gap-1"
           >
-            <span>➕</span> Gestisci Fasce
+            <span>➕</span> {$t('manageShifts')}
           </button>
         </div>
 
@@ -142,13 +142,13 @@
             onclick={() => modificaData(giorno)}
             class="rounded-xl border border-gray-300 dark:border-slate-700 px-3.5 py-2 text-xs font-bold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition active:scale-95"
           >
-            Modifica Giorno
+            {$t('editDay')}
           </button>
           <button
             onclick={() => deleteWorkedDay(giorno)}
             class="rounded-xl bg-red-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-red-700 transition active:scale-95"
           >
-            Elimina Giorno
+            {$t('deleteDay')}
           </button>
         </div>
       </div>
@@ -157,12 +157,12 @@
       <div class="border-t sm:border-t-0 sm:border-l pt-3 sm:pt-0 sm:pl-4 flex flex-col justify-between dark:border-slate-800 text-left sm:text-right min-w-[160px]">
         <div class="flex flex-col text-green-600 dark:text-green-400 text-xs gap-0.5 font-mono">
           {#if giorno.payMode === 'fixed'}
-            <span class="font-sans font-extrabold text-gray-600 dark:text-gray-300">Paga Fissa</span>
+            <span class="font-sans font-extrabold text-gray-600 dark:text-gray-300">{$t('fixedRate')}</span>
             <span class="text-sm font-bold">€ {giorno.fixedPrice}</span>
           {:else}
             {@const wage = giorno.hourlyWage ?? 10}
-            <span class="font-sans font-extrabold text-gray-600 dark:text-gray-300">Dettaglio Paga</span>
-            <span>Ore: € {calculateTotalHours(giorno.timeSlots) * wage} ({wage}€/h)</span>
+            <span class="font-sans font-extrabold text-gray-600 dark:text-gray-300">{$t('payDetails')}</span>
+            <span>{$t('hours')}: € {calculateTotalHours(giorno.timeSlots) * wage} ({wage}€/h)</span>
             {#if giorno.customSettings && giorno.customSettings.length > 0}
               {#each giorno.customSettings as setting}
                 {#if setting.active}
@@ -176,7 +176,7 @@
           {/if}
         </div>
         <div class="mt-3 sm:mt-auto pt-2 border-t dark:border-slate-800 flex sm:block justify-between items-center">
-          <span class="text-[10px] text-gray-500 dark:text-gray-400 font-sans uppercase font-black">Totale Giorno</span>
+          <span class="text-[10px] text-gray-500 dark:text-gray-400 font-sans uppercase font-black">{$t('dailyTotal')}</span>
           <span class="text-lg font-black text-green-600 dark:text-green-400 block sm:inline">
             € {calculateDailyEarnings(giorno)}
           </span>

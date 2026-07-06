@@ -1,4 +1,5 @@
 import { writable, derived } from 'svelte/store';
+import { format } from 'date-fns';
 
 export type Lang = 'it' | 'en' | 'fr';
 
@@ -6,16 +7,29 @@ export const currentLang = writable<Lang>('it');
 
 export function initLang() {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('app_lang') as Lang;
-    if (saved && ['it', 'en', 'fr'].includes(saved)) {
-      currentLang.set(saved);
-      return;
-    }
-    const browserLang = navigator.language.slice(0, 2);
-    if (['en', 'fr', 'it'].includes(browserLang)) {
-      currentLang.set(browserLang as Lang);
-    } else {
-      currentLang.set('en'); // Default to English
+    try {
+      let saved: Lang | null = null;
+      try {
+        saved = localStorage.getItem('app_lang') as Lang;
+      } catch (err) {
+        console.warn("localStorage is not accessible:", err);
+      }
+      
+      if (saved && ['it', 'en', 'fr'].includes(saved)) {
+        currentLang.set(saved);
+        return;
+      }
+      
+      const rawLang = navigator.language || (navigator.languages && navigator.languages[0]) || 'en';
+      const browserLang = rawLang.slice(0, 2);
+      if (['en', 'fr', 'it'].includes(browserLang)) {
+        currentLang.set(browserLang as Lang);
+      } else {
+        currentLang.set('en'); // Default to English
+      }
+    } catch (e) {
+      console.error("Error initializing i18n:", e);
+      currentLang.set('en'); // Fallback to English on error
     }
   }
 }
@@ -23,7 +37,11 @@ export function initLang() {
 export function changeLang(lang: Lang) {
   currentLang.set(lang);
   if (typeof window !== 'undefined') {
-    localStorage.setItem('app_lang', lang);
+    try {
+      localStorage.setItem('app_lang', lang);
+    } catch (err) {
+      console.warn("Could not save language to localStorage:", err);
+    }
   }
 }
 
@@ -105,6 +123,25 @@ export const translations = {
     shiftLog: 'Registro Turni',
     monthText: 'Mese',
     selectLanguage: 'Lingua',
+    
+    // Report text keys
+    defaultCompany: 'Azienda Standard (Default)',
+    standardPay: 'Generica / Paga Standard',
+    daysWorked: 'Giorni lavorati',
+    hourlyCompensation: 'Compenso orario',
+    fixedCompensation: 'Compenso fisso',
+    expenseReimbursements: 'Rimborsi spese',
+    tips: 'Entrate extra/Mance',
+    companyTotal: 'TOTALE AZIENDA',
+    generalMonthlyTotal: 'TOTALE MENSILE GENERALE',
+    totalMonthlyHours: 'Ore totali mensili',
+    compensationSummary: 'RIEPILOGO COMPENSI',
+    aggregatedReportText: 'Report generale mensile copiato!',
+    companyReportText: 'Report copiato!',
+    flatRateDetails: 'Fisso',
+    allowancesDetails: 'Rimborsi',
+    totalText: 'Totale',
+    addShiftsPrompt: 'Aggiungi turni dalla Home per visualizzare le statistiche.',
     
     // Companies page translations
     companySettings: 'Gestione Aziende',
@@ -204,6 +241,25 @@ export const translations = {
     monthText: 'Month',
     selectLanguage: 'Language',
     
+    // Report text keys
+    defaultCompany: 'Standard Company (Default)',
+    standardPay: 'Generic / Standard Pay',
+    daysWorked: 'Days worked',
+    hourlyCompensation: 'Hourly compensation',
+    fixedCompensation: 'Fixed compensation',
+    expenseReimbursements: 'Expense reimbursements',
+    tips: 'Extra earnings/Tips',
+    companyTotal: 'COMPANY TOTAL',
+    generalMonthlyTotal: 'GENERAL MONTHLY TOTAL',
+    totalMonthlyHours: 'Total monthly hours',
+    compensationSummary: 'COMPENSATION SUMMARY',
+    aggregatedReportText: 'General monthly report copied!',
+    companyReportText: 'Report copied!',
+    flatRateDetails: 'Flat',
+    allowancesDetails: 'Reimbursements',
+    totalText: 'Total',
+    addShiftsPrompt: 'Add shifts from Home to view statistics.',
+    
     // Companies page translations
     companySettings: 'Manage Companies',
     addCompany: 'Add New Company',
@@ -302,6 +358,25 @@ export const translations = {
     monthText: 'Mois',
     selectLanguage: 'Langue',
     
+    // Report text keys
+    defaultCompany: 'Entreprise Standard (Défaut)',
+    standardPay: 'Générique / Paye Standard',
+    daysWorked: 'Jours travaillés',
+    hourlyCompensation: 'Indemnité horaire',
+    fixedCompensation: 'Compenso fisso',
+    expenseReimbursements: 'Remboursements de frais',
+    tips: 'Gains supplémentaires/Pourboires',
+    companyTotal: 'TOTAL DE L\'ENTREPRISE',
+    generalMonthlyTotal: 'TOTAL MENSUEL GÉNÉRAL',
+    totalMonthlyHours: 'Heures mensuelles totales',
+    compensationSummary: 'RÉSUMÉ DES RÉTRIBUTIONS',
+    aggregatedReportText: 'Rapport mensuel général copié !',
+    companyReportText: 'Rapport copié !',
+    flatRateDetails: 'Tarif Fixe',
+    allowancesDetails: 'Remboursements',
+    totalText: 'Total',
+    addShiftsPrompt: 'Ajoutez des quarts depuis l\'accueil pour voir les statistiques.',
+    
     // Companies page translations
     companySettings: 'Gérer les Entreprises',
     addCompany: 'Ajouter une Nouvelle Entreprise',
@@ -320,7 +395,7 @@ export const translations = {
     
     // Months helper translation
     gennaio: 'Janvier', febbraio: 'Février', marzo: 'Mars', aprile: 'Avril', maggio: 'Mai', giugno: 'Juin',
-    luglio: 'Juillet', agosto: 'Août', settembre: 'Septembre', ottobre: 'Octobre', novembre: 'Novembre', dicembre: 'Décembre'
+    luglio: 'Juillet', agosto: 'Août', septembre: 'Septembre', ottobre: 'Octobre', novembre: 'Novembre', dicembre: 'Décembre'
   }
 };
 
