@@ -59,6 +59,7 @@ export const translations = {
     payDetails: 'Dettaglio Paga',
     hours: 'Ore',
     dailyTotal: 'Totale Giorno',
+    edit: 'Modifica',
     editDay: 'Modifica Giorno',
     deleteDay: 'Elimina Giorno',
     manageShifts: 'Gestisci Fasce',
@@ -176,6 +177,7 @@ export const translations = {
     payDetails: 'Pay Details',
     hours: 'Hours',
     dailyTotal: 'Daily Total',
+    edit: 'Edit',
     editDay: 'Edit Day',
     deleteDay: 'Delete Day',
     manageShifts: 'Manage shifts',
@@ -293,6 +295,7 @@ export const translations = {
     payDetails: 'Détails de la paye',
     hours: 'Heures',
     dailyTotal: 'Total du jour',
+    edit: 'Modifier',
     editDay: 'Modifier le jour',
     deleteDay: 'Supprimer le jour',
     manageShifts: 'Gérer les tranches',
@@ -395,7 +398,7 @@ export const translations = {
     
     // Months helper translation
     gennaio: 'Janvier', febbraio: 'Février', marzo: 'Mars', aprile: 'Avril', maggio: 'Mai', giugno: 'Juin',
-    luglio: 'Juillet', agosto: 'Août', septembre: 'Septembre', ottobre: 'Octobre', novembre: 'Novembre', dicembre: 'Décembre'
+    luglio: 'Juillet', agosto: 'Août', septembre: 'Septembre', ottobre: 'Octobre', novembre: 'Novembre', décembre: 'Décembre'
   }
 };
 
