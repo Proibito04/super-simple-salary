@@ -10,6 +10,7 @@
   import { toasts } from '$lib/toast'
   import Portal from './Portal.svelte'
   import Aggiungi from './aggiungi.svelte'
+  import { editingDay } from '$lib/store'
   interface Props {
     children?: import('svelte').Snippet;
   }
@@ -32,7 +33,13 @@
   ]
 
   function toggleAggiungi() {
-    visibleAdd = !visibleAdd
+    if (visibleAdd) {
+      visibleAdd = false
+    } else if ($editingDay) {
+      editingDay.set(null)
+    } else {
+      visibleAdd = true
+    }
   }
 
   async function importGourmetPreset() {
@@ -95,7 +102,7 @@
 {:else if !loaded}
   <h1>Caricamento in corso...</h1>
 {:else}
-  {#if visibleAdd}
+  {#if visibleAdd || $editingDay}
     <Aggiungi />
   {/if}
 

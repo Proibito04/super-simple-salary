@@ -4,6 +4,7 @@
   import { format } from 'date-fns'
   import { DB } from '$lib/database'
   import { toasts } from '$lib/toast'
+  import { editingDay } from '$lib/store'
   import type { TimeSlot, WorkedDay, Company, ActiveCustomSetting } from '../types'
 
   const { toggleAggiungi } = getContext<{ toggleAggiungi: () => void }>('vision')
@@ -13,10 +14,12 @@
   
   // New features state
   let companies: Company[] = $state([])
-  let selectedCompanyId = $state('default')
+  let selectedCompanyId = $state('')
   let payMode = $state<'hourly' | 'fixed'>('hourly')
   let fixedPrice = $state(0)
   let extraEarnings = $state(0)
+  let originalDateString = $state('')
+  let lastSelectedCompanyId = $state('')
   
   let activeCustomSettings: ActiveCustomSetting[] = $state([])
 
@@ -24,19 +27,36 @@
 
   onMount(async () => {
     companies = await DB.getCompanies()
+    
+    // Prefill form if editing an existing day
+    const ed = $editingDay
+    if (ed) {
+      giorno = format(ed.date, 'yyyy-MM-dd')
+      originalDateString = giorno
+      fasceOrarie = ed.timeSlots.map(f => ({ ...f }))
+      selectedCompanyId = ed.companyId || ''
+      lastSelectedCompanyId = selectedCompanyId
+      payMode = ed.payMode
+      fixedPrice = ed.fixedPrice || 0
+      extraEarnings = ed.extraEarnings || 0
+      activeCustomSettings = ed.customSettings ? ed.customSettings.map(s => ({ ...s })) : []
+    }
   })
 
-  // Watch for selected company changes to initialize the custom settings checkboxes
+  // Watch for selected company changes to initialize the custom settings checkboxes (only when selectedCompanyId changes)
   $effect(() => {
-    if (selectedCompany) {
-      activeCustomSettings = (selectedCompany.customSettings || []).map(s => ({
-        id: s.id,
-        name: s.name,
-        amount: s.amount,
-        active: true
-      }))
-    } else {
-      activeCustomSettings = []
+    if (selectedCompanyId !== lastSelectedCompanyId) {
+      lastSelectedCompanyId = selectedCompanyId
+      if (selectedCompany) {
+        activeCustomSettings = (selectedCompany.customSettings || []).map(s => ({
+          id: s.id,
+          name: s.name,
+          amount: s.amount,
+          active: true
+        }))
+      } else {
+        activeCustomSettings = []
+      }
     }
   })
 
@@ -50,23 +70,35 @@
     fasceOrarie = fasceOrarie.filter((_, i) => i !== index)
   }
 
+  // Funzione per eliminare l'intero giorno corrente (in modalità modifica)
+  async function eliminaGiornoCorrente() {
+    const ed = $editingDay
+    if (!ed) return
+    const formattedDate = format(ed.date, 'dd/MM/yyyy')
+    if (confirm(`Sei sicuro di voler eliminare definitivamente questo giorno lavorato (${formattedDate})?`)) {
+      try {
+        await DB.deleteWorkedDay(ed)
+        toasts.show(`Giorno lavorato del ${formattedDate} eliminato! 🗑️`, "success")
+        toggleAggiungi()
+      } catch (e: any) {
+        toasts.show("Errore durante l'eliminazione: " + (e.message || String(e)), "error")
+      }
+    }
+  }
+
   // Funzione per salvare il giorno lavorativo nel DB
   async function salvaGiornoLavorato(e: Event) {
-    console.log("[DEBUG] salvaGiornoLavorato started. Event:", e);
     e.preventDefault();
 
     // Filter out empty time slots
     const validTimeSlots = fasceOrarie.filter(f => f.start && f.end);
-    console.log("[DEBUG] validTimeSlots:", validTimeSlots);
     
     if (validTimeSlots.length === 0 && payMode === 'hourly') {
-      console.log("[DEBUG] No valid time slots provided for hourly pay mode");
       toasts.show("Inserisci almeno una fascia oraria completa (inizio e fine)!", "error");
       return;
     }
 
     const date = new Date(giorno)
-    console.log("[DEBUG] Saving date:", date, "payMode:", payMode);
     const newWorkedDay: WorkedDay = {
       date,
       timeSlots: validTimeSlots.map(f => ({ ...f })),
@@ -75,8 +107,6 @@
       companyName: selectedCompany?.name || undefined,
       fixedPrice: payMode === 'fixed' ? fixedPrice : undefined,
       hourlyWage: payMode === 'hourly' ? (selectedCompany?.hourlyWage ?? 10) : undefined,
-      
-      // Store dynamic custom settings
       customSettings: activeCustomSettings.length > 0 ? activeCustomSettings.map(s => ({ ...s })) : undefined,
       travel: false,
       carUsage: false,
@@ -84,8 +114,13 @@
     }
 
     try {
+      // Se la data è cambiata, elimina il vecchio record per evitare duplicazioni
+      if (originalDateString && originalDateString !== giorno) {
+        await DB.deleteWorkedDay({ date: new Date(originalDateString) } as WorkedDay)
+      }
+      
       await DB.addWorkedDay(newWorkedDay)
-      toasts.show("Turno salvato con successo!", "success");
+      toasts.show($editingDay ? "Turno aggiornato con successo! 💾" : "Turno salvato con successo! 🎉", "success");
       toggleAggiungi()
     } catch (e: any) {
       toasts.show("Errore durante il salvataggio: " + (e.message || String(e)), "error");
@@ -100,7 +135,7 @@
     class="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl border dark:border-slate-800 dark:bg-slate-900 dark:text-white"
   >
     <div class="flex items-center justify-between border-b pb-3 mb-5">
-      <h2 class="text-xl font-black text-gray-900 dark:text-white">Aggiungi Turno</h2>
+      <h2 class="text-xl font-black text-gray-900 dark:text-white">{$editingDay ? 'Modifica Giorno' : 'Aggiungi Turno'}</h2>
       <button
         type="button"
         class="rounded-xl border px-3 py-1.5 text-xs font-bold hover:bg-gray-100 dark:border-slate-800 dark:hover:bg-slate-800 transition"
@@ -149,7 +184,7 @@
       </div>
     </div>
 
-    <!-- Rimborsi / Indennità disponibili (Both for hourly and fixed if needed) -->
+    <!-- Rimborsi / Indennità disponibili -->
     <div class="mb-4 rounded-2xl border p-4 dark:border-slate-800 dark:bg-slate-950 flex flex-col gap-3">
       <span class="block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">Rimborsi / Indennità:</span>
       {#if activeCustomSettings.length > 0}
@@ -214,7 +249,7 @@
       />
     </div>
 
-    <!-- Fasce Orarie (Always visible to track hours) -->
+    <!-- Fasce Orarie -->
     <div class="mb-5 border-t pt-4 dark:border-slate-800">
       <span class="mb-3 block text-xs font-extrabold uppercase tracking-wider text-gray-400 dark:text-gray-500">
         Fasce Orarie lavorate (per tracciare le ore):
@@ -243,15 +278,13 @@
             />
           </div>
           <div>
-            {#if index > 0}
-              <button
-                type="button"
-                onclick={() => rimuoviFasciaOraria(index)}
-                class="w-full rounded-xl bg-red-600 py-2 font-bold text-sm text-white hover:bg-red-700 active:scale-95 transition shadow-sm"
-              >
-                Rimuovi
-              </button>
-            {/if}
+            <button
+              type="button"
+              onclick={() => rimuoviFasciaOraria(index)}
+              class="w-full rounded-xl bg-red-600 py-2 font-bold text-sm text-white hover:bg-red-700 active:scale-95 transition shadow-sm"
+            >
+              Rimuovi
+            </button>
           </div>
         </div>
       {/each}
@@ -267,19 +300,27 @@
 
     <!-- Actions -->
     <div class="flex justify-end gap-3 mt-6 border-t pt-4 dark:border-slate-800">
+      {#if $editingDay}
+        <button
+          type="button"
+          class="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 transition active:scale-95 mr-auto"
+          onclick={eliminaGiornoCorrente}
+        >
+          Elimina Giorno
+        </button>
+      {/if}
       <button
         type="button"
         class="rounded-xl border px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 dark:border-slate-750 dark:text-gray-300 dark:hover:bg-slate-800 transition active:scale-95"
-        onclick={() => { console.log("[DEBUG] Annulla clicked"); toggleAggiungi(); }}
+        onclick={toggleAggiungi}
       >
         Annulla
       </button>
       <button
         type="submit"
-        onclick={() => console.log("[DEBUG] Salva Turno button clicked!")}
         class="rounded-xl bg-green-600 px-5 py-2 text-sm font-bold text-white hover:bg-green-700 shadow-md active:scale-95 transition"
       >
-        Salva Turno
+        {$editingDay ? 'Salva Modifiche' : 'Salva Turno'}
       </button>
     </div>
   </form>
